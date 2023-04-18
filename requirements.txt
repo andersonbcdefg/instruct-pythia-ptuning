@@ -6,3 +6,4 @@ datasets
 bitsandbytes
 pynvml
 wandb
+fire
