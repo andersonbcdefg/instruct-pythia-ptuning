@@ -1,5 +1,7 @@
 import numpy as np
 import torch
+import re
+import itertools
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
 from adapter import AdapterModel
@@ -86,17 +88,50 @@ def tokenize_inputs(examples, tokenizer, max_length, adapter_size):
     out = {k: torch.stack(v) for k, v in out.items()}
     return out
 
+def parse_file_name(file_name):
+    # Define the regex pattern to match the file name structure
+    # The pattern .* matches any sequence of characters before the run and steps components
+    pattern = r'^(?:.*/)?(?P<run>[^-]*?)-step-(?P<steps>\d+)\.npy$'
+    
+    # Use re.match to match the pattern and extract the capturing groups
+    match = re.match(pattern, file_name)
+    
+    # If the pattern matches, extract the 'run' and 'steps' groups
+    if match:
+        run = match.group('run')
+        steps = int(match.group('steps'))
+        return run, steps
+    else:
+        return None
 
-def save_checkpoint(model, steps, run):
+def save_checkpoint(save_dir, model, steps, run):
     file_name = f"/storage/{run}-step-{steps}.npy"
     np.save(file_name, model.adapter.data.cpu().numpy())
 
 
-def restore_from_checkpoint(checkpoint_path, model, dataloader, scheduler):
+def restore_from_checkpoint(config, checkpoint_path, model, dataloader, scheduler):
+    # todo: allow recovering optimizer state
+    _, steps = parse_file_name(checkpoint_path)
+    
     # load the adapter weights into the model
+    ckpt_array = np.load(checkpoint_path)
+    as_tensor = torch.tensor(ckpt_array, dtype=torch.float32)
+    device = model.adapter.data.device
+    model.adapter.data = as_tensor.to(device)
+
+    steps_to_fastforward = steps * config.batch_size // config.microbatch_size
 
     # fast-forward the dataloader
+    dataloader_slice = itertools.islice(dataloader, steps_to_fastforward + 1, None)
 
     # fast-forward the scheduler
+    for _ in range(steps_to_fastforward):
+        scheduler.step()
 
-    pass
+    # return number of epochs left, partial dataloader for rest of this epoch, fastforwarded scheduler, steps so far, etc.
+    return {
+        "dataloader_slice": dataloader_slice,
+        "scheduler": scheduler,
+        "steps": steps,
+
+    }
