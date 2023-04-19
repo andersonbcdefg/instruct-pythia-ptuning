@@ -6,6 +6,8 @@ from transformers import AutoModelForCausalLM, AutoTokenizer
 
 from adapter import AdapterModel
 
+import pandas as pd
+
 
 def print_trainable_parameters(model):
     """
