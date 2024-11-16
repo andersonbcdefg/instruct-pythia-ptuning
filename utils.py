@@ -1,12 +1,11 @@
+import itertools
+import re
+
 import numpy as np
 import torch
-import re
-import itertools
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
 from adapter import AdapterModel
-
-import pandas as pd
 
 
 def print_trainable_parameters(model):
@@ -90,21 +89,23 @@ def tokenize_inputs(examples, tokenizer, max_length, adapter_size):
     out = {k: torch.stack(v) for k, v in out.items()}
     return out
 
+
 def parse_file_name(file_name):
     # Define the regex pattern to match the file name structure
     # The pattern .* matches any sequence of characters before the run and steps components
-    pattern = r'^(?:.*/)?(?P<run>[^-]*?)-step-(?P<steps>\d+)\.npy$'
-    
+    pattern = r"^(?:.*/)?(?P<run>[^-]*?)-step-(?P<steps>\d+)\.npy$"
+
     # Use re.match to match the pattern and extract the capturing groups
     match = re.match(pattern, file_name)
-    
+
     # If the pattern matches, extract the 'run' and 'steps' groups
     if match:
-        run = match.group('run')
-        steps = int(match.group('steps'))
+        run = match.group("run")
+        steps = int(match.group("steps"))
         return run, steps
     else:
         return None
+
 
 def save_checkpoint(save_dir, model, steps, run):
     file_name = f"/storage/{run}-step-{steps}.npy"
@@ -114,7 +115,7 @@ def save_checkpoint(save_dir, model, steps, run):
 def restore_from_checkpoint(config, checkpoint_path, model, dataloader, scheduler):
     # todo: allow recovering optimizer state
     _, steps = parse_file_name(checkpoint_path)
-    
+
     # load the adapter weights into the model
     ckpt_array = np.load(checkpoint_path)
     as_tensor = torch.tensor(ckpt_array, dtype=torch.float32)
@@ -130,10 +131,10 @@ def restore_from_checkpoint(config, checkpoint_path, model, dataloader, schedule
     for _ in range(steps_to_fastforward):
         scheduler.step()
 
-    # return number of epochs left, partial dataloader for rest of this epoch, fastforwarded scheduler, steps so far, etc.
+    # return number of epochs left, partial dataloader for
+    # rest of this epoch, fastforwarded scheduler, steps so far, etc.
     return {
         "dataloader_slice": dataloader_slice,
         "scheduler": scheduler,
         "steps": steps,
-
     }
